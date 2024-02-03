@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Real-time Location Tracking</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+    }
+
+    #map-container {
+      height: 700px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    #map {
+      height: 100%;
+    }
+  </style>
+</head>
+<body>
+
+<div id="map-container">
+  <div id="map"></div>
+</div>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script>
+  const socket = new WebSocket('wss://' + window.location.host);
+  const map = L.map('map').setView([17.984200, 79.530847], 18);
+  const markers = {};
+
+  var polygonCoordinates = [
+    [17.989592, 79.532958],
+    [17.986468, 79.535360],
+    [17.983305, 79.537664],
+    [17.981735, 79.538423],
+    [17.980116, 79.539000],
+    [17.977989, 79.532745],
+    [17.980334, 79.526322],
+    [17.981508, 79.523619],
+    [17.986381, 79.525789],
+    [17.989592, 79.532958]
+  ];
+
+  var polygon = L.polygon(polygonCoordinates, { color: 'red' }).addTo(map);
+
+  map.fitBounds(polygon.getBounds());
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors'
+  }).addTo(map);
+
+  socket.onmessage = (event) => {
+    console.log("got messahe" , event.data)
+    const locationData = JSON.parse(event.data);
+    const truckId = 1;
+    if (markers[truckId]) {
+      markers[truckId].setLatLng([locationData.latitude, locationData.longitude]);
+    } else {
+      const marker = L.marker([locationData.latitude, locationData.longitude]).addTo(map);
+      marker.bindPopup(`ID: ${truckId}<br>Latitude: ${locationData.latitude}, Longitude: ${locationData.longitude}`);
+      markers[truckId] = marker;
+    }
+
+    map.setView([locationData.latitude, locationData.longitude]);
+  };
+</script>
+
+</body>
+</html>
