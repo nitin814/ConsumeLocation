@@ -26,11 +26,9 @@ async function consumeMessages(ws) {
   await consumer.run({
     eachMessage: async ({ message }) => {
       const locationData = JSON.parse(message.value.toString());
-      // console.log('Received location from Kafka:', locationData);
 
       ws.clients.forEach((client) => {
         if (client.readyState === WebSocket.OPEN) {
-          // console.log("ok bro");
           client.send(JSON.stringify(locationData));
         }
       });
@@ -38,4 +36,5 @@ async function consumeMessages(ws) {
   });
 }
 
-module.exports = consumeMessages;
+
+module.exports.consumeMessages = consumeMessages;

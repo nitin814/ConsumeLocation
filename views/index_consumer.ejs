@@ -5,34 +5,198 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Real-time Location Tracking</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <link rel="stylesheet" href="/css/button.css">
+  <!-- Boxiocns CDN Link -->
+  <link href='https://unpkg.com/boxicons@2.0.7/css/boxicons.min.css' rel='stylesheet'>
+  <link href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
   <style>
+    #map {
+        width: 100%; /* Set your desired width */
+        height: 100%; /* Set your desired height */
+        max-width: 100%; /* Ensure it doesn't extend outside */
+        max-height: 100%; /* Ensure it doesn't extend outside */
+        border: 1px solid #000; /* Optional border for visualization */
+    }
+    #box {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        box-sizing: border-box; /* Ensure padding and border are included in the width */
+        overflow-x: hidden; /* Prevent horizontal scrolling */
+        margin: 0 auto; /* Center the box horizontally */
+        height: 98vh; /* Set the height of the box to 100% of viewport height */
+        max-width: 450px; /* Set maximum width */
+        max-height: 99vh;
+        width: 100%; /* Allow box to take up available width */
+    }
+
+    #button {
+        height: 6%; /* Initially set to a percentage of viewport height */
+        width: 100%; /* Each button takes half of the width */
+        padding: 0%;
+        margin: 0%;
+    }
+
+    button {
+            height: 100%; /* Initially set to a percentage of viewport height */
+            width: 100%; /* Each button takes half of the width */
+            padding: 0%;
+            margin: 0%;
+      }
+
+    .button-image {
+            width: 100%;
+            height: 100%;
+    }
+
     body {
       margin: 0;
       padding: 0;
     }
 
-    #map-container {
-      height: 700px;
-      overflow: hidden;
-      position: relative;
+    #map {
+      height: 93%;
+    }
+    
+    #flashMessage {
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1000;
     }
 
-    #map {
-      height: 100%;
-    }
   </style>
 </head>
 <body>
 
-<div id="map-container">
-  <div id="map"></div>
-</div>
+  <div id="box">
+    <div id="map">
+      <div id="flashMessage" class="alert alert-warning alert-dismissible fade show" role="alert" style="display: none;">
+        Your live location is being shared with yaari drivers for the next 30 seconds
+        <button type="button" class="close" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+    </div>
+    <div class="button" id="CallKart">
+      <div class="text-icon">
+        <span class="text">Call Kart</span>
+      </div>
+    </div>
+  </div>
+  
+
+
 
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 <script>
-  const socket = new WebSocket('wss://' + window.location.host);
+
+const closeButton = document.querySelector('#flashMessage .close');
+
+
+closeButton.addEventListener('click', function() {
+  const flashMessage = document.getElementById('flashMessage');
+  flashMessage.style.display = 'none';
+});
+
+// Function to show flash message
+function showFlashMessage(message, duration) {
+  const flashMessage = document.getElementById('flashMessage');
+  flashMessage.innerHTML = message;
+  flashMessage.style.display = 'block'; // Display the flash message
+
+  // Hide the flash message after the specified duration
+  setTimeout(function() {
+    flashMessage.style.display = 'none';
+  }, duration);
+}
+
+
+  const socket = new WebSocket('ws://' + window.location.host); 
+
+  function showError(error) {
+        let errorMessage = 'Unknown error';
+
+        switch (error.code) {
+            case error.PERMISSION_DENIED:
+                errorMessage = 'User denied the request for Geolocation.';
+                break;
+            case error.POSITION_UNAVAILABLE:
+                errorMessage = 'Location information is unavailable.';
+                break;
+            case error.TIMEOUT:
+                errorMessage = 'The request to get user location timed out.';
+                break;
+            case error.UNKNOWN_ERROR:
+                errorMessage = 'An unknown error occurred.';
+                break;
+        }
+    }
+
+
+  let watchId;
+  const userId = '<%= userId %>';
+  function getLocationn() {
+        
+    const button = document.querySelector(".button"),
+    text = document.querySelector(".text");
+    button.classList.add("progress");
+    text.innerText = "Calling the Kart";
+
+    watchId =  navigator.geolocation.watchPosition(
+        (position) => {
+            const latitude = position.coords.latitude;
+            const longitude = position.coords.longitude;
+            const locationData = { latitude, longitude , userId };
+
+            if (socket.readyState === WebSocket.OPEN) {
+                socket.send(JSON.stringify(locationData));
+                console.log("sent to socket on server the location -> " , longitude , latitude);
+            } else {
+                console.log('WebSocket is not open yet.');
+            }
+        },
+        (error) => {
+            showError(error);
+        },
+        {
+            enableHighAccuracy: true,
+        }
+      );
+
+    setTimeout(() => {
+        navigator.geolocation.clearWatch(watchId);
+        console.log('Location tracking stopped after 30 seconds.');
+        stopsendinglocation(userId);
+        button.classList.remove("progress"); //remove progress after 6s
+        text.innerText = "Call Kart";
+        button.classList.remove("disabled");
+    }, 30000); 
+  }
+
+
+  function stopsendinglocation(userId)
+  {
+    console.log("sending message to other side ... ")
+    const info = {userId : userId , event : "closing"}
+    if (socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify(info));
+    } else {
+        console.log('WebSocket is not open yet.');
+    }
+  }
+  
+
   const map = L.map('map').setView([17.984200, 79.530847], 18);
   const markers = {};
+
+  var customIcon = L.icon({
+    iconUrl: '/itis.webp', // URL to the .webp image file
+    iconSize: [45, 45], // size of the icon
+    iconAnchor: [32, 46], // point of the icon which will correspond to marker's location
+    popupAnchor: [0, -16] // point from which the popup should open relative to the iconAnchor
+  });
 
   var polygonCoordinates = [
     [17.989592, 79.532958],
@@ -55,21 +219,85 @@
     attribution: '© OpenStreetMap contributors'
   }).addTo(map);
 
-  socket.onmessage = (event) => {
-    console.log("got messahe" , event.data)
-    const locationData = JSON.parse(event.data);
-    const truckId = 1;
-    if (markers[truckId]) {
-      markers[truckId].setLatLng([locationData.latitude, locationData.longitude]);
-    } else {
-      const marker = L.marker([locationData.latitude, locationData.longitude]).addTo(map);
-      marker.bindPopup(`ID: ${truckId}<br>Latitude: ${locationData.latitude}, Longitude: ${locationData.longitude}`);
-      markers[truckId] = marker;
+// ------------------------------------------------------------------------------------------
+// showing user its own locationnnn .................................
+
+  function startLocationTracking() {
+        if ("geolocation" in navigator) {
+            navigator.permissions.query({ name: 'geolocation' }).then(permissionStatus => {
+                if (permissionStatus.state === 'granted') {
+                    getLocation();
+                } else if (permissionStatus.state === 'prompt') {
+                    navigator.geolocation.getCurrentPosition(
+                        () => {
+                            getLocation();
+                        },
+                        () => console.log("Cant get permisison , refresh the page ... ")
+                    );
+                } else {
+                    console.log("THis brower dosent support the website , off ...")
+                }
+            });
+        } else {
+            console.error("Geolocation is not supported by this browser.");
+        }
     }
 
-    map.setView([locationData.latitude, locationData.longitude]);
-  };
-</script>
+    function getLocation() {
+    navigator.geolocation.watchPosition(
+        (position) => {
+            const latitude = position.coords.latitude;
+            const longitude = position.coords.longitude;
+            const pincod = 9;
+            if (markers[pincod]) {
+              markers[pincod].setLatLng([latitude, longitude]);
+            } else {
+              const marker = L.marker([latitude, longitude] ,  { icon: customIcon }).addTo(map);
+              marker.bindPopup(`Welcome brooo , this has to be updated to somthing about instructions or useful stuffs ...`);
+              markers[pincod] = marker;
+            }
+        },
+        (error) => {
+            showError(error);
+        },
+        {
+            enableHighAccuracy: true,
+        }
+        );
+    }
 
+    startLocationTracking();
+
+// ----------------------------------------------------------------------------------------
+    
+
+
+  socket.onmessage = (event) => {
+    const locationData = JSON.parse(event.data);
+    const pincode = locationData.pincode;
+    if (markers[pincode]) {
+      markers[pincode].setLatLng([locationData.latitude, locationData.longitude]);
+      markers[pincode].getPopup().setContent(`ID: ${pincode}<br>Count : ${locationData.count}`);
+    } else {
+      const marker = L.marker([locationData.latitude, locationData.longitude]).addTo(map);
+      marker.bindPopup(`ID: ${pincode}<br>Count : ${locationData.count}`);
+      markers[pincode] = marker;
+    }
+  };
+
+  document.getElementById('CallKart').addEventListener('click', function() {
+      if (!this.classList.contains("disabled")) {
+        this.classList.add("disabled");
+        showFlashMessage('Your live location will be shared with yaari dirvers for the next 30 seconds' , 5000)
+        getLocationn();
+      } 
+  });
+
+  window.addEventListener('beforeunload', function(event) {
+    stopsendinglocation(userId);
+  });
+
+ 
+</script>
 </body>
 </html>
